@@ -65,8 +65,8 @@ NATS er skrevet i Go, og har klientbiblioteker for mer enn 40 språk.
 **Forenkling**
 
 - Enkle byggeklosser for å løse kompliserte utfordringer i distribuerte systemer.
-- Stedsuavhengighet.
-- Seperasjon og enkel integrasjon mellom systemer.
+- Stedsuavhengighet. Multi-cloud og eget datasenter på "easy-mode".
+- Seperasjon, robusthet og enkel integrasjon i og mellom systemer.
 - Muliggjør integrasjon over data.
 ---
 
