@@ -67,7 +67,8 @@ NATS er skrevet i Go, og har klientbiblioteker for mer enn 40 språk.
 - Enkle byggeklosser for å løse kompliserte utfordringer i distribuerte systemer.
 - Stedsuavhengighet. Multi-cloud og eget datasenter på "easy-mode".
 - Seperasjon, robusthet og enkel integrasjon i og mellom systemer.
-- Muliggjør integrasjon over data.
+- Muliggjør integrasjon over data. Færre synkrone integrasjoner.
+
 ---
 
 # Hva bruker vi NATS til?
@@ -78,7 +79,7 @@ NATS er skrevet i Go, og har klientbiblioteker for mer enn 40 språk.
 
 # Hva bruker vi NATS til?
 
-Fra et fugleperspektiv benytter vi NATS til:
+Fra et fugleperspektiv benytter vi NATS som:
 
 - *"Service Mesh"*
 - *"Data Mesh"* - (transport og tilgjengeliggjøring)
@@ -87,13 +88,34 @@ Fra et fugleperspektiv benytter vi NATS til:
 
 # Hva Bruker vi NATS til?
 
-Mer konkret benytter vi NATS til:
+Mer konkret, benytter vi NATS til:
 
 - Kommunikasjon mellom mikrotjenester
-    - Publish/Subscribe for å sende meldinger til mange mottakere.
+    - Publish/Subscribe for å sende meldinger til mange mottakere eller samle informasjon fra mange sendere.
     - Request/Reply for "synkron" eller mer presist asynkron kommunikasjon mellom tjenster.
 - Streaming og behandling av meldinger
-    - stuff 
+    - Arbeidskøer
+    - Append-only-logs
+    - Event sourcing mønstre
+- Transport av dataprodukter til Analyse
+    - Benytter arbeidskøer som verktøy for å speile en append-only-log.
+    - Eksplisitt deling veldikeholdes av produktteamet.
+
+---
+
+# Hva Bruker vi NATS til?
+
+Mer konkret, benytter vi NATS til:
+
+- Som en bro (mesh/vpn) mellom Sky og eget datasenter.
+    - NATS Infrastrukturen er tilgjengelig på Internett.
+- Som object store for persistering av større filer.
+    - Gjerne i kombinasjon med en persitent metadata strøm.
+- Tilstandsmotor for Mattilsynets Plattform
+    - Event drevet motor rundt ønsker lagret i KeyValue buckets. Aktive *reconcilers* rundt persisterte ønsker.
+    - Inspirert av Kubernetes, men løftet et nivå høyere. Et ønske kunne ha vært, "jeg vil gjerne ha en kubernetes".
+
+
 ---
 
 # Hvordan virker NATS? 
@@ -112,14 +134,11 @@ nats-server --jetstream
 
 I NATS kommuniserer vi over *subjects*. Dette gir en navnebasert addressering i motsetning til de ulike ip, port og path baserte endepunktene vi vanligvis er nødt til å forholde oss til. 
 
-Eksempel:
-- "ordre" er her et subject vi kan benytte for å sende bestillinger.
-
 ---
 
 # Hvordan bruker jeg så et subject?
 
-På et subject, i dette tilfelle "ordre", kan vi publisere eller lytte (pub eller sub).
+På et subject, i dette tilfelle "hello", kan vi publisere noen meldinger:
 
 ```bash
 for i in $(seq 10)
@@ -136,19 +155,23 @@ For et antiklimaks! Men, hva skjedde egentlig der?
 
 # Hvordan lytte på et subject?
 
-```bash
-for i in $(seq 10)
-do
-    nats pub ordre "{ordreid:${i}}"
-done
-echo "Done..."
-```
-
-La oss åpne en ny terminal hvor vi også lytter, før vi kjører bash scriptet over.
+La oss åpne en ny terminal hvor vi også lytter; før vi kjører bash scriptet over.
 
 ```
 nats sub ordre 
 ```
+
+før vi kjører bash scriptet over.
+
+
+```bash
+for i in $(seq 10)
+do
+    nats pub hello "{hello_message:${i}}"
+done
+echo "Done..."
+```
+
 ---
 
 # Publish / Subscribe 
@@ -157,22 +180,34 @@ Den grunnleggende måten å "kommunisere" på i NATS er altså "publish/subscrib
 
 I utgangspunktet er *subjects* i NATS "ephemeral". De eksisterer så lenge noen publiserer og noen lytter. 
 
-Er det ingen som lytter går meldingen ut i intet.  
+Er det ingen som lytter går meldingen ut i intet.
 
 ---
 
 # Men vent, vi kan gjøre mer med et subject
 
-Et subject er ikke bare en flat struktur i NATS kan det være hierarkisk.
+Et subject er ikke bare en flat struktur, i NATS kan det være et meningsfyllt hierarki.
 
-Vi kan utvide "chat" subject benyttet tidligere med meningsfyllt struktur:
+Vi kan utvide "hello" subject benyttet tidligere med meningsfyllt struktur:
 
-- chat
-- chat.$room
-- chat.$user.dm
-- chat.$user.poke
+- hello.world 
+- hello.meetup.hamar
+- hello.users.${arne}
 
-Basert på disse har vi tilført mening og dynamiske subjects. Vår banale "chat klient" har nå ulike subjects å lytte på.
+Basert på disse har vi tilført kontekst og "dynamiske" subjects. 
+
+---
+
+# Men vent, vi kan gjøre mer med et subject
+
+Gitt følgende subjects:
+
+- hello.world 
+- hello.meetup.hamar
+- hello.${username}.advarsel
+
+Vi kan nå 
+
 
 ---
 
