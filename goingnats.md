@@ -1,10 +1,10 @@
-# Going NATS!
+# Let's go NATS!
 
 ...
 
 ---
 
-# Going NATS!
+# Let's go NATS!
 
 1. Hva er NATS?
 2. Hvorfor bruker vi NATS?
@@ -33,18 +33,22 @@ Egenskaper:
 - Lettvekt - Minimalt ressursbrukt. Enkelt å sette opp og bruke.
 - Distribuert - Skalerbart og tilgjengelig med støtte for klynger og avanserte topologier.
 - Allsidig - Pub/Sub, Request/Reply, Queues, Streaming, KV, Object Store.
-- Multi-tenant - Desentralisert autentisering og autorisasjon.
+- Tilgjengelig - Feiltoleranser, høy tilgjengelighet.
+- Sikkerhet - Desentralisert autentisering og autorisasjon, TLS transport og JWT-based zero trust.
 
 NATS er skrevet i Go, og har klientbiblioteker for mer enn 40 språk.
-
 
 ---
 
 # Hva er NATS?
 
+## Referanser
+
 - https://nats.io
+- https://nats.io/docs
 - https://github.com/nats.io/
-- cncf link
+- https://www.cncf.io/projects/nats/ 
+- https://natsbyexample.com/ 
 
 ---
 
@@ -81,8 +85,9 @@ NATS er skrevet i Go, og har klientbiblioteker for mer enn 40 språk.
 
 Fra et fugleperspektiv benytter vi NATS som:
 
-- *"Service Mesh"*
-- *"Data Mesh"* - (transport og tilgjengeliggjøring)
+- *"Service Mesh"* (load balancing/scale-out, retry, leveransegaranti og sikkerhet)
+- *"Data Mesh"* - (transport, tilgjengeliggjøring og sikkerhet)
+
 
 ---
 
@@ -114,31 +119,56 @@ Mer konkret, benytter vi NATS til:
 - Tilstandsmotor for Mattilsynets Plattform
     - Event drevet motor rundt ønsker lagret i KeyValue buckets. Aktive *reconcilers* rundt persisterte ønsker.
     - Inspirert av Kubernetes, men løftet et nivå høyere. Et ønske kunne ha vært, "jeg vil gjerne ha en kubernetes".
-
+- Plattform integrasjoner, eksempelvis: 
+    - Azure AD App Registration
+    - IdPorten, Borger autentisering og autorisasjon.
+    - Maskinporten, Maskin til maskin autentisering og autorisasjon.
 
 ---
 
 # Hvordan virker NATS? 
 
 > Dette høres ganske fett ut, men jeg trenger en mer nerdete tilnærming!
+> Hvordan kan jeg komme i gang å jobbe med dette?
 
 Skjønner, la oss komme i gang.
 
 ```
 nats-server --jetstream
 ```
+---
+
+# Publish / Subscribe 
+
+Den grunnleggende fundamentet for kommunikasjon i NATS er meldinger i en "publish/subscribe" modell.
+
+En melding består av:
+- Et subject
+- Data i form av et `byte array`
+- Så mange `message headers` du måtte ønske
+- Et valgfritt `reply` addresse felt.
+
+> Default meldingsstørrelse er opp til 1MB. Dette kan konfigureres og økes til maximum 64MB.
 
 ---
 
-# Subjects
+# Pulblish / Subscribe | Subjects
 
-I NATS kommuniserer vi over *subjects*. Dette gir en navnebasert addressering i motsetning til de ulike ip, port og path baserte endepunktene vi vanligvis er nødt til å forholde oss til. 
+I NATS kommuniserer vi over `subjects`. Dette gir en navnebasert addressering i motsetning til de ulike ip, port og path baserte endepunktene vi vanligvis er nødt til å forholde oss til. 
+
+I utgangspunktet er `subjects` i NATS *ephemeral*. De eksisterer så lenge noen publiserer og noen lytter. Er det ingen som lytter går meldingen ut i intet.
+
+Hvordan kan et `subject` se ut?
+
+```
+hello
+```
 
 ---
 
 # Hvordan bruker jeg så et subject?
 
-På et subject, i dette tilfelle "hello", kan vi publisere noen meldinger:
+På et subject, i dette tilfelle `hello`, kan vi publisere noen meldinger:
 
 ```bash
 for i in $(seq 10)
@@ -174,16 +204,6 @@ echo "Done..."
 
 ---
 
-# Publish / Subscribe 
-
-Den grunnleggende måten å "kommunisere" på i NATS er altså "publish/subscribe."
-
-I utgangspunktet er *subjects* i NATS "ephemeral". De eksisterer så lenge noen publiserer og noen lytter. 
-
-Er det ingen som lytter går meldingen ut i intet.
-
----
-
 # Men vent, vi kan gjøre mer med et subject
 
 Et subject er ikke bare en flat struktur, i NATS kan det være et meningsfyllt hierarki.
@@ -192,21 +212,63 @@ Vi kan utvide "hello" subject benyttet tidligere med meningsfyllt struktur:
 
 - hello.world 
 - hello.meetup.hamar
-- hello.users.${arne}
+- hello.${username}.dm
 
-Basert på disse har vi tilført kontekst og "dynamiske" subjects. 
+De 2 øverste er ganske åpenbare, men la oss utforske den siste som har en litt mer dynamisk struktur.
 
 ---
 
 # Men vent, vi kan gjøre mer med et subject
 
-Gitt følgende subjects:
+```bash
+nats pub hello.world "Yolo!"
+nats pub hello.meetup.hamar "Tjenare!"
+nats pub hello.ivar.dm "NATS er kult!" 
+nats pub hello.arne.dm "Hei, har du testa disse NATS greiene!?"
+nats pub hello.kari.dm "How about those yanks?"
+echo "Done..."
+```
+---
 
-- hello.world 
-- hello.meetup.hamar
-- hello.${username}.advarsel
+# Publish / Subscribe (Fan-out)
 
-Vi kan nå 
+```plantuml
+~~~plantuml -utxt -pipe
+@startuml
+skinparam monochrome true
+title Pub/Sub Model (Static Diagram)
+left to right direction
+
+[Publisher] --> [NATS Subject]
+[NATS Subject] <-- [Subscriber1]
+[NATS Subject] <-- [Subscriber2]
+[NATS Subject] <-- [Subscriber3]
+
+@enduml
+~~~
+```
+---
+
+# Publish / Subscribe (Fan-in)
+
+```plantuml
+~~~plantuml -utxt -pipe
+@startuml
+skinparam monochrome true
+title Fan-In with Queue Group
+
+node "NATS Subject" as NATS
+
+Publisher1 --> NATS : Publish "updates"
+Publisher2 --> NATS : Publish "updates"
+Publisher3 --> NATS : Publish "updates"
+NATS --> Subscriber : Distributes message
+
+@enduml
+
+~~~
+```
+
 
 
 ---
@@ -244,54 +306,6 @@ import "fmt"
 func main() {
     fmt.Println("hello, world!")
 }
-```
-
----
-
-# buggy 
-
-becasue of code above?
-
----
-
-# Publish / Subscribe (Fan-out)
-
-```plantuml
-~~~plantuml -utxt -pipe
-@startuml
-skinparam monochrome true
-title Pub/Sub Model (Static Diagram)
-left to right direction
-
-[Publisher] --> [NATS Subject]
-[NATS Subject] <-- [Subscriber1]
-[NATS Subject] <-- [Subscriber2]
-[NATS Subject] <-- [Subscriber3]
-
-@enduml
-~~~
-```
-
----
-
-# Publish / Subscribe (Fan-in)
-
-```plantuml
-~~~plantuml -utxt -pipe
-@startuml
-skinparam monochrome true
-title Fan-In with Queue Group
-
-node "NATS Subject" as NATS
-
-Publisher1 --> NATS : Publish "updates"
-Publisher2 --> NATS : Publish "updates"
-Publisher3 --> NATS : Publish "updates"
-NATS --> Subscriber : Distributes message
-
-@enduml
-
-~~~
 ```
 
 ---
