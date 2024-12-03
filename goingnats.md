@@ -29,7 +29,7 @@ NATS er et prosjekt under CNCF paraplyen og har vært et "incubating project" si
 
 Egenskaper:
 
-- Høy ytelse - Designet for ekstrem hastighet og lav forsinkelse. *Millioner av meldinger i sekundet*.
+- Høy ytelse - Designet for høy ytelse og lav forsinkelse. *Millioner av meldinger i sekundet*.
 - Lettvekt - Minimalt ressursbrukt. Enkelt å sette opp og bruke.
 - Distribuert - Skalerbart og tilgjengelig med støtte for klynger og avanserte topologier.
 - Allsidig - Pub/Sub, Request/Reply, Queues, Streaming, KV, Object Store.
@@ -128,7 +128,7 @@ Mer konkret, benytter vi NATS til:
 
 # Hvordan virker NATS? 
 
-> Dette høres ganske fett ut, men jeg trenger en mer nerdete tilnærming!
+> Dette høres ganske fett ut, men jeg trenger en mer teknisk tilnærming!
 > Hvordan kan jeg komme i gang å jobbe med dette?
 
 Skjønner, la oss komme i gang.
@@ -140,7 +140,7 @@ nats-server --jetstream
 
 # Publish / Subscribe 
 
-Den grunnleggende fundamentet for kommunikasjon i NATS er meldinger i en "publish/subscribe" modell.
+Det grunnleggende fundamentet for kommunikasjon i NATS er meldinger i en "publish/subscribe" modell.
 
 En melding består av:
 - Et subject
@@ -154,7 +154,7 @@ En melding består av:
 
 # Pulblish / Subscribe | Subjects
 
-I NATS kommuniserer vi over `subjects`. Dette gir en navnebasert addressering i motsetning til de ulike ip, port og path baserte endepunktene vi vanligvis er nødt til å forholde oss til. 
+I NATS kommuniserer vi over `subjects` eller da emner på norsk. Dette gir en navnebasert addressering i motsetning til de ulike ip, port og path baserte endepunktene vi vanligvis er nødt til å forholde oss til. 
 
 I utgangspunktet er `subjects` i NATS *ephemeral*. De eksisterer så lenge noen publiserer og noen lytter. Er det ingen som lytter går meldingen ut i intet.
 
@@ -185,15 +185,15 @@ For et antiklimaks! Men, hva skjedde egentlig der?
 
 # Hvordan lytte på et subject?
 
-La oss åpne en ny terminal hvor vi også lytter; før vi kjører bash scriptet over.
+La oss åpne en ny terminal hvor vi også lytter; før vi kjører bash scriptet neders her.
 
+Slik kan du lytte på et subject:
 ```
 nats sub ordre 
 ```
 
-før vi kjører bash scriptet over.
 
-
+La oss publishere noen medlinger igjen:
 ```bash
 for i in $(seq 10)
 do
@@ -212,7 +212,7 @@ Vi kan utvide "hello" subject benyttet tidligere med meningsfyllt struktur:
 
 - hello.world 
 - hello.meetup.hamar
-- hello.${username}.dm
+- hello.{username}.dm
 
 De 2 øverste er ganske åpenbare, men la oss utforske den siste som har en litt mer dynamisk struktur.
 
@@ -220,6 +220,7 @@ De 2 øverste er ganske åpenbare, men la oss utforske den siste som har en litt
 
 # Men vent, vi kan gjøre mer med et subject
 
+La oss publiser disse meldingene noen ganger og leke med hvordan vi lytter:
 ```bash
 nats pub hello.world "Yolo!"
 nats pub hello.meetup.hamar "Tjenare!"
@@ -228,6 +229,7 @@ nats pub hello.arne.dm "Hei, har du testa disse NATS greiene!?"
 nats pub hello.kari.dm "How about those yanks?"
 echo "Done..."
 ```
+
 ---
 
 # Publish / Subscribe (Fan-out)
@@ -269,60 +271,173 @@ NATS --> Subscriber : Distributes message
 ~~~
 ```
 
-
-
 ---
 
-# Det var jo litt kult, men hva med...
+# Request-Reply
 
-Vi kan jo ikke være helt "cowboy", vi har *krav!*.
+En NATS melding kan inneholde en `reply` verdi. Her kan vi få et dynamisk unikt `subject` en klient forventer å få et svar på sin publiserte forespørsel.
 
-- Vi trenger koordinering av meldinger!
-- Hos oss trenger vi persistering!
-- Og... 
-- Samt...
+Server:
+```
+nats reply commands --command "echo 'Processed command: {{Request}}'" -q meetup-commands
+```
 
-Slapp av, vi kommer til det.
-
----
-
-# Kø grupper
-
-I pub/sub blir meldinger levert som *1:N*. Det vil si at alle som lytter vil får meldingen som blir publisert.
-
-Ved å introdusere en "queue group" vil du fortsatt få meldinger etter *1:N* prinsippet, men du har nå muligheten til å koordinere meldinger for alle som lytter med samme kø navn.
-
-Vi får med andre ord en lastbalansering av meldinger og vi kan sørge for at vi bare konsumerer meldingen en gang for et formål.
-
----
-
-# Run go hello world
-
+Client:
 ```go
-package main
-
-import "fmt"
+///package main
+///
+///import (
+///    "fmt"
+///    "log"
+///    "time"
+///    "github.com/nats-io/nats.go"
+///)
 
 func main() {
-    fmt.Println("hello, world!")
+///    // Connect to NATS
+///    nc, err := nats.Connect(nats.DefaultURL) // Default is nats://127.0.0.1:4222
+///    if err != nil {
+///    	log.Fatalf("Error connecting to NATS: %v", err)
+///}
+///defer nc.Close()
+    timeout := 2 * time.Second 
+    reply, err := nc.Request("commands", []byte("reboot"), timeout)
+    if err != nil {
+        log.Fatalf("Error sending request: %v", err)
+    }
+	fmt.Printf("Received reply: %s\n", string(reply.Data))
 }
 ```
 
 ---
 
-# mermaid
+# Koordinering
 
-```mermaid
-~~~mermaid-ascii -
-graph LR
-A --> B & C
-B --> C & D
-D --> C
-~~~
+Noen la kanskje merke til `-q meetup-commands`?
+
+Dette er en kø gruppe (queue group). Dette benyttes for *koordinering* for å oppnå:
+
+- Arbeidsfordeling
+- Skalerbarhet
+- Feiltolereanse
+
+---
+
+# Persistering
+
+Vi har til nå bare snakket om funksjonalitet som finnes i det som omtales som **NATS Core**.
+
+For persistering av meldinger finnes det et overbygg som heter **Jetstream**.
+
+Som med alt annet i NATS så baserer dette seg i sin enkelhet å persistere meldinger på `subjects` du er interessert i og samler dette i en `jetstream`.
+
+Dette gir oss fundamentet for `streaming` og `event sourcing` mønstre.
+
+---
+
+# Persistering - Retention Policies
+
+**Jetstream** er fleksibelt og understøtter en masse bruksområder. 
+
+Vi har 3 ulike `Retention Policies`:
+- Limits (default)
+    - Meldinger beholdes inntil strømmen treffer sin konfigurerte størrelse eller antall meldinger.
+- Interest
+    - Meldinger beholdes inntil alle registrerte konsumenter på har motatt og `Acked` meldingen. 
+ - WorkQueue
+    - Medlinger beholdes inntil en meldinger har blitt konsumert og `Acked`.
+
+---
+
+# Persistering - Retention Parameters
+
+I tillegg til `Retention Policies` har vi også `Retention Parameters` for enda bedre kontroll på hvordan meldinger persisteres.
+
+## Retention Parameters
+
+- **Max Age** - Hvor lenge en melding kan ligge på en strøm
+- **Max Messages** - Hvor mange meldinger vi gidder å ta vare på
+- **Max Bytes** - Hvor mye data vi gidder å ta vare på
+
+---
+
+# Persistering - La oss lage en strøm
+
+Gitt følgende `subjects` så ønsker vi å lage en `limit` basert strøm.
+
+- sensors.pizzanini.temp
+- sensors.pizzanini.co2
+- sensors.pizzanini.humidity
+
+Kode for programatisk opprettelse:
+
+```go
+///package main
+///
+///import (
+///	"fmt"
+///
+///	"github.com/nats-io/nats.go"
+///)
+
+func main() {
+///	// Connect to the NATS server
+///	nc, err := nats.Connect("nats://localhost:4222")
+///	if err != nil {
+///		fmt.Printf("Error connecting to NATS: %v", err)
+///     return
+///	}
+///	defer nc.Close()
+///
+///	// Create a JetStream context
+///	js, err := nc.JetStream()
+///	if err != nil {
+///		fmt.Printf("Error creating JetStream context: %v", err)
+///        return
+///	}
+///
+    streamConfig := &nats.StreamConfig{
+        Name:     "SENSORS",
+        Subjects: []string{"sensors.pizzanini.temp", "sensors.pizzanini.humidity", "sensors.pizzanini.co2"},
+        Storage:  nats.MemoryStorage,
+        Replicas: 1,
+    }
+    _, err = js.AddStream(streamConfig)
+    if err != nil {
+        fmt.Printf("Error adding stream: %v", err)
+    }
+    fmt.Println("Stream successfully created!")
+}
 ```
 
+---
+
+# Persistering - La oss få litt data på strømmen
+
+```bash
+SUBJECTS=("sensors.pizzanini.temp" "sensors.pizzanini.humidity" "sensors.pizzanini.co2")
+
+generate_random_value() {
+  echo $((RANDOM % 100))  # Random integer between 0 and 99
+}
+
+for subject in "${SUBJECTS[@]}"; do
+  for i in {1..10}; do
+    value=$(generate_random_value)
+    nats pub "$subject" "$value" 
+  done
+done
+
+echo "Publishing complete!"
+
 ```
-~~~cat
-hello world
-~~~
+
+---
+
+# Persistering - Status på strømmen
+
+Hva fikk vi:
+
+```bash
+nats stream ls 
 ```
