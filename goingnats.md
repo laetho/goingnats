@@ -158,12 +158,6 @@ I NATS kommuniserer vi over `subjects` eller da emner på norsk. Dette gir en na
 
 I utgangspunktet er `subjects` i NATS *ephemeral*. De eksisterer så lenge noen publiserer og noen lytter. Er det ingen som lytter går meldingen ut i intet.
 
-Hvordan kan et `subject` se ut?
-
-```
-hello
-```
-
 ---
 
 # Hvordan bruker jeg så et subject?
@@ -185,11 +179,11 @@ For et antiklimaks! Men, hva skjedde egentlig der?
 
 # Hvordan lytte på et subject?
 
-La oss åpne en ny terminal hvor vi også lytter; før vi kjører bash scriptet neders her.
+La oss åpne en ny terminal hvor vi også lytter; før vi kjører bash scriptet nederst her.
 
 Slik kan du lytte på et subject:
 ```
-nats sub ordre 
+nats sub hello 
 ```
 
 
@@ -206,13 +200,13 @@ echo "Done..."
 
 # Men vent, vi kan gjøre mer med et subject
 
-Et subject er ikke bare en flat struktur, i NATS kan det være et meningsfyllt hierarki.
+Et subject er ikke bare et navn, i NATS kan det være et meningsfyllt hierarki.
 
-Vi kan utvide "hello" subject benyttet tidligere med meningsfyllt struktur:
+Vi kan utvide **hello** subject benyttet tidligere med et hirarki som vi bruker til å tilføre mening og kontekst:
 
 - hello.world 
 - hello.meetup.hamar
-- hello.{username}.dm
+- hello.{{username}}.dm
 
 De 2 øverste er ganske åpenbare, men la oss utforske den siste som har en litt mer dynamisk struktur.
 
@@ -226,7 +220,7 @@ nats pub hello.world "Yolo!"
 nats pub hello.meetup.hamar "Tjenare!"
 nats pub hello.ivar.dm "NATS er kult!" 
 nats pub hello.arne.dm "Hei, har du testa disse NATS greiene!?"
-nats pub hello.kari.dm "How about those yanks?"
+nats pub hello.kari.dm "Fikk du med deg at Pizzanini bytter navn!?"
 echo "Done..."
 ```
 
@@ -275,7 +269,7 @@ NATS --> Subscriber : Distributes message
 
 # Request-Reply
 
-En NATS melding kan inneholde en `reply` verdi. Her kan vi få et dynamisk unikt `subject` en klient forventer å få et svar på sin publiserte forespørsel.
+En NATS melding kan inneholde en `reply` verdi. Her kan vi få et dynamisk unikt `subject` en klient forventer å få et svar på sin forespørsel. Det er altså klienten som bestemmer hvor svaret skal leveres.
 
 Server:
 ```
@@ -316,12 +310,12 @@ func main() {
 
 Noen la kanskje merke til `-q meetup-commands`?
 
-Dette er en kø gruppe (queue group). Dette benyttes for *koordinering* for å oppnå:
+Dette er en kø gruppe (`queue group`). Dette kan benyttes for å oppnå:
 
 - Arbeidsfordeling
 - Skalerbarhet
 - Feiltolereanse
-
+ 
 ---
 
 # Persistering
@@ -330,7 +324,7 @@ Vi har til nå bare snakket om funksjonalitet som finnes i det som omtales som *
 
 For persistering av meldinger finnes det et overbygg som heter **Jetstream**.
 
-Som med alt annet i NATS så baserer dette seg i sin enkelhet å persistere meldinger på `subjects` du er interessert i og samler dette i en `jetstream`.
+Som med alt annet i **NATS** så baserer dette seg i sin enkelhet å persistere meldinger på `subjects` du er interessert i og samler dette i en `jetstream`.
 
 Dette gir oss fundamentet for `streaming` og `event sourcing` mønstre.
 
@@ -344,9 +338,9 @@ Vi har 3 ulike `Retention Policies`:
 - Limits (default)
     - Meldinger beholdes inntil strømmen treffer sin konfigurerte størrelse eller antall meldinger.
 - Interest
-    - Meldinger beholdes inntil alle registrerte konsumenter på har motatt og `Acked` meldingen. 
+    - Meldinger beholdes inntil alle registrerte konsumenter på strømmen har motatt og `Acked` meldingen. 
  - WorkQueue
-    - Medlinger beholdes inntil en meldinger har blitt konsumert og `Acked`.
+    - Medlinger beholdes inntil meldinger har blitt konsumert og `Acked`.
 
 ---
 
@@ -369,6 +363,10 @@ Gitt følgende `subjects` så ønsker vi å lage en `limit` basert strøm.
 - sensors.pizzanini.temp
 - sensors.pizzanini.co2
 - sensors.pizzanini.humidity
+
+---
+
+# Jetstream - La oss lage en strøm
 
 Kode for programatisk opprettelse:
 
@@ -401,6 +399,7 @@ func main() {
         Name:     "SENSORS",
         Subjects: []string{"sensors.pizzanini.temp", "sensors.pizzanini.humidity", "sensors.pizzanini.co2"},
         Storage:  nats.MemoryStorage,
+        Retention: nats.LimitsPolicy,
         Replicas: 1,
     }
     _, err = js.AddStream(streamConfig)
@@ -504,6 +503,7 @@ func main() {
       sum += value
       count++
       msg.Ack()
+mp":"2024-12-04T21:13:39.539539415Z","stream":"SENSORS","consumer":"iOKvVFm1","action":"delete"}
     })
 ///	if err != nil {
 ///		fmt.Printf("Error starting consumer subscription: %v\n", err)
@@ -559,14 +559,33 @@ All klient eller da `consumer` tilstand blir lagret på **NATS** serveren.
 
 ---
 
-# Go Test
+# FIN - Men vent det er så mye mer
 
-```go
-package main
+- Key/Value Store
+- Object Store
+- Dead Letter Queues
+- Multitenancy
+- Message Replay
+- Autentisering og autorisasjon
+- Deling
+- Observerbarhet
+- NATS Server Topologier
+- MQTT
+- WSS
 
-import fmt
+Men vi setter en strek her for denne gang.
 
-func main() {
-    fmt.Println("Test from slides")
-}
-```
+**Takk for oppmerksomheten!**
+
+---
+
+# Om presentasjonen 
+
+Slide-"deck" er tilgjengelig på https://github.com/laetho/goingnats.
+
+Software som benyttes er "slides" på https://github.com/maaslalani/slides. Men det er også mulig å se på innholdet som ren markdown.
+
+> "slides" programmet er tilgjengelig via homebrew for de som er på Mac.
+
+
+
