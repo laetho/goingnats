@@ -336,7 +336,7 @@ Dette gir oss fundamentet for `streaming` og `event sourcing` mønstre.
 
 ---
 
-# Persistering - Retention Policies
+# Jetstream - Retention Policies
 
 **Jetstream** er fleksibelt og understøtter en masse bruksområder. 
 
@@ -350,7 +350,7 @@ Vi har 3 ulike `Retention Policies`:
 
 ---
 
-# Persistering - Retention Parameters
+# Jetstream - Retention Parameters
 
 I tillegg til `Retention Policies` har vi også `Retention Parameters` for enda bedre kontroll på hvordan meldinger persisteres.
 
@@ -362,7 +362,7 @@ I tillegg til `Retention Policies` har vi også `Retention Parameters` for enda 
 
 ---
 
-# Persistering - La oss lage en strøm
+# Jetstream - La oss lage en strøm
 
 Gitt følgende `subjects` så ønsker vi å lage en `limit` basert strøm.
 
@@ -414,7 +414,7 @@ func main() {
 
 ---
 
-# Persistering - La oss få litt data på strømmen
+# Jetstream - La oss få litt data på strømmen
 
 ```bash
 SUBJECTS=("sensors.pizzanini.temp" "sensors.pizzanini.humidity" "sensors.pizzanini.co2")
@@ -436,7 +436,7 @@ echo "Publishing complete!"
 
 ---
 
-# Persistering - Status på strømmen
+# Jetstream - Status på strømmen
 
 Hva fikk vi:
 
@@ -446,92 +446,116 @@ nats stream ls
 
 ---
 
-# Persistering - La oss bruke dataene på strømmen til noe banalt
+# Jetstream - La oss bruke dataene på strømmen til noe banalt
 
 ```go
-package main
-
-import (
-	"fmt"
-	"strconv"
-
-	"github.com/nats-io/nats.go"
-)
+///package main
+///
+///import (
+///    "context"
+///    "fmt"
+///    "strconv"
+///    "time"
+///
+///    "github.com/nats-io/nats.go"
+///    "github.com/nats-io/nats.go/jetstream"
+///)
+var sum, count float64
 
 func main() {
-	// Connect to the NATS server
-	nc, err := nats.Connect("nats://localhost:4222")
-	if err != nil {
-		fmt.Printf("Error connecting to NATS: %v\n", err)
-		return
-	}
-	defer nc.Close()
+/// // Connect to the NATS server
+/// nc, err := nats.Connect("nats://localhost:4222")
+/// if err != nil {
+/// fmt.Printf("Error connecting to NATS: %v\n", err)
+/// return
+/// }
+/// defer nc.Close()
 
-	// Create a JetStream context
-	js, err := nc.JetStream()
-	if err != nil {
-		fmt.Printf("Error creating JetStream context: %v\n", err)
-		return
-	}
+/// // Create a JetStream context
+/// js, err := jetstream.New(nc)
+/// if err != nil {
+///	fmt.Printf("Error creating JetStream context: %v\n", err)
+///	return
+/// }
+///
+/// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+/// defer cancel()
+///
+/// // Create an ephemeral consumer
+    consumer, err := js.CreateConsumer(ctx, "SENSORS", jetstream.ConsumerConfig{
+      AckPolicy:         jetstream.AckExplicitPolicy,
+      FilterSubject:     "sensors.pizzanini.temp",
+      InactiveThreshold: 10 * time.Millisecond,
+    })
+///	if err != nil {
+///		fmt.Printf("Error creating ephemeral consumer: %v\n", err)
+///		return
+///	}
+///
+/// fmt.Println("Consuming messages with ephemeral consumer...")
+/// // Start consuming messages using the consumer
 
-	// Define the stream and subject
-	stream := "SENSORS"
-	subject := "sensors.pizzanini.temp"
-
-	// Create an ephemeral consumer
-	consumer, err := js.AddConsumer(stream, &nats.ConsumerConfig{
-		AckPolicy:     nats.AckExplicitPolicy,
-		FilterSubject: subject,
-	})
-	if err != nil {
-		fmt.Printf("Error creating ephemeral consumer: %v\n", err)
-		return
-	}
-
-	// Start consuming messages using the ephemeral consumer
-	sub, err := js.Consume(stream, consumer.Name)
-	if err != nil {
-		fmt.Printf("Error starting consumer subscription: %v\n", err)
-		return
-	}
-	defer sub.Stop()
-
-	fmt.Println("Consuming messages with ephemeral consumer...")
-
-	var sum, count float64
-
-	// Consume messages
-	for msg := range sub.Messages() {
-		if msg == nil {
-			break
-		}
-
-		// Parse the message data
-		value, err := strconv.ParseFloat(string(msg.Data), 64)
-		if err != nil {
-			fmt.Printf("Invalid temperature value: %s\n", msg.Data)
-			msg.Nak() // Negative acknowledgment
-			continue
-		}
-
-		// Update the sum and count
-		sum += value
-		count++
-
-		// Acknowledge the message
-		msg.Ack()
-	}
-
-	// Calculate and display the average
-	if count == 0 {
-		fmt.Println("No temperature data found.")
-	} else {
-		average := sum / count
-		fmt.Printf("Average temperature: %.2f\n", average)
-	}
+    subscription, err := consumer.Consume(func(msg jetstream.Msg) {
+      value, err := strconv.ParseFloat(string(msg.Data()), 64)
+      if err != nil {
+        fmt.Printf("Invalid temperature value: %s\n", string(msg.Data()))
+        msg.Nak() // Negative acknowledgment
+      }
+      sum += value
+      count++
+      msg.Ack()
+    })
+///	if err != nil {
+///		fmt.Printf("Error starting consumer subscription: %v\n", err)
+///		return
+///	}
+///	defer subscription.Stop()
+///    time.Sleep(time.Second * 1)
+///    if count == 0 {
+///      fmt.Println("No temperature data found.")
+///    } else {
+///      average := sum / count
+///      fmt.Printf("Average temperature: %.2f\n", average)
+///    }
 }
-
 ```
+
+---
+
+# Jetstream - Consumer
+
+En `consumer` representerer en klient, eller en samling med klienter om `queue groups` benyttes i kombinasjon med `consumer`. 
+
+| **Consumer Type**              | **Queue Group**    | **Bruksområde**                                                                 |
+|--------------------------------|--------------------|---------------------------------------------------------------------------------|
+| **Ephemeral Consumer**         | **Uten Queue Group** | - Midlertidig abonnent uten behov for lastbalansering.                          |
+|                                |                    | - Engangsabonnement eller testing av meldingsflyt.                             |
+| **Ephemeral Consumer**         | **Med Queue Group** | - Lastbalansering mellom flere midlertidige prosesser.                         |
+|                                |                    | - Passer for kortvarige oppgaver som kan tolerere meldingtap.                  |
+| **Durable Consumer**           | **Uten Queue Group** | - Individuelle abonnenter som trenger å gjenopprette tilstand ved frakobling.     |
+|                                |                    | - For langvarig prosessering med garantier for meldingstilstand.               |
+| **Durable Consumer**           | **Med Queue Group** | - Lastbalansering mellom flere prosesser med vedvarende tilstand.                 |
+|                                |                    | - Brukes der det er kritisk at ingen meldinger går tapt selv uten aktive medlemmer. |
+
+
+---
+
+# Jetstream - Consumer tilstand
+
+Tilstand for en consumer refererer til informasjonen som lagres for å holde rede på:
+
+- Hvilke meldinger som allerede er behandlet (eller er under behandling).
+- Acknowledgement status (hvilke meldinger som er ack’et og hvilke som må leveres på nytt).
+- Andre konfigurasjonsdetaljer som påvirker oppførselen til consumeren.
+
+All klient eller da `consumer` tilstand blir lagret på **NATS** serveren.
+
+| **Scenario**                            | **Consumer-type**   | **Hvordan tilstand brukes**                                                   |
+|-----------------------------------------|---------------------|--------------------------------------------------------------------------------|
+| Testing eller kortvarige oppgaver       | Ephemeral           | Tilstand ikke lagret (in-memory) – meldinger behandles kun i sanntid.                     |
+| Robust meldingbehandling                | Durable             | Offset lagres – behandlingen fortsetter der den slapp ved avbrudd.            |
+| Kritiske arbeidsflyter med retries      | Durable             | Ack-status lagres for å sikre at meldinger ikke behandles mer enn én gang.    |
+| Lastbalansering mellom flere prosesser  | Durable + Queue     | Tilstand lagres for hele gruppen – sikrer kontinuitet selv uten aktive medlemmer. |
 
 ---
 
