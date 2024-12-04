@@ -405,6 +405,7 @@ func main() {
     _, err = js.AddStream(streamConfig)
     if err != nil {
         fmt.Printf("Error adding stream: %v", err)
+        return
     }
     fmt.Println("Stream successfully created!")
 }
@@ -440,4 +441,93 @@ Hva fikk vi:
 
 ```bash
 nats stream ls 
+```
+
+---
+
+# Persistering - La oss bruke dataene på strømmen til noe banalt
+
+```go
+package main
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/nats-io/nats.go"
+)
+
+func main() {
+	// Connect to the NATS server
+	nc, err := nats.Connect("nats://localhost:4222")
+	if err != nil {
+		fmt.Printf("Error connecting to NATS: %v\n", err)
+		return
+	}
+	defer nc.Close()
+
+	// Create a JetStream context
+	js, err := nc.JetStream()
+	if err != nil {
+		fmt.Printf("Error creating JetStream context: %v\n", err)
+		return
+	}
+
+	// Define the stream and subject
+	stream := "SENSORS"
+	subject := "sensors.pizzanini.temp"
+
+	// Create an ephemeral consumer
+	consumer, err := js.AddConsumer(stream, &nats.ConsumerConfig{
+		AckPolicy:     nats.AckExplicitPolicy,
+		FilterSubject: subject,
+	})
+	if err != nil {
+		fmt.Printf("Error creating ephemeral consumer: %v\n", err)
+		return
+	}
+
+	// Start consuming messages using the ephemeral consumer
+	sub, err := js.Consume(stream, consumer.Name)
+	if err != nil {
+		fmt.Printf("Error starting consumer subscription: %v\n", err)
+		return
+	}
+	defer sub.Stop()
+
+	fmt.Println("Consuming messages with ephemeral consumer...")
+
+	var sum, count float64
+
+	// Consume messages
+	for msg := range sub.Messages() {
+		if msg == nil {
+			break
+		}
+
+		// Parse the message data
+		value, err := strconv.ParseFloat(string(msg.Data), 64)
+		if err != nil {
+			fmt.Printf("Invalid temperature value: %s\n", msg.Data)
+			msg.Nak() // Negative acknowledgment
+			continue
+		}
+
+		// Update the sum and count
+		sum += value
+		count++
+
+		// Acknowledge the message
+		msg.Ack()
+	}
+
+	// Calculate and display the average
+	if count == 0 {
+		fmt.Println("No temperature data found.")
+	} else {
+		average := sum / count
+		fmt.Printf("Average temperature: %.2f\n", average)
+	}
+}
+
 ```
