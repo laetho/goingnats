@@ -288,24 +288,25 @@ Client:
 ///
 ///import (
 ///    "fmt"
-///    "log"
 ///    "time"
 ///    "github.com/nats-io/nats.go"
 ///)
 
 func main() {
 ///    // Connect to NATS
-///    nc, err := nats.Connect(nats.DefaultURL) // Default is nats://127.0.0.1:4222
+///    nc, err := nats.Connect(nats.DefaultURL) 
 ///    if err != nil {
-///    	log.Fatalf("Error connecting to NATS: %v", err)
-///}
+///    	fmt.Printf("Error connecting to NATS: %v", err)
+///     return
+///    }
 ///defer nc.Close()
     timeout := 2 * time.Second 
     reply, err := nc.Request("commands", []byte("reboot"), timeout)
     if err != nil {
-        log.Fatalf("Error sending request: %v", err)
+        fmt.Printf("Error sending request: %v", err)
+	return
     }
-	fmt.Printf("Received reply: %s\n", string(reply.Data))
+    fmt.Printf("Received reply: %s\n", string(reply.Data))
 }
 ```
 
@@ -530,4 +531,18 @@ func main() {
 	}
 }
 
+```
+
+---
+
+# Go Test
+
+```go
+package main
+
+import fmt
+
+func main() {
+    fmt.Println("Test from slides")
+}
 ```
