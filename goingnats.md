@@ -2,6 +2,10 @@
 
 ...
 
+```
+$ whois
+```
+
 ---
 
 # Let's go NATS!
@@ -34,6 +38,8 @@ La oss gå NATS, sammen!
 - Stedsuavhengighet. Multi-cloud og eget datasenter på "easy-mode".
 - Seperasjon, robusthet og enkel integrasjon i og mellom systemer.
 - Muliggjør integrasjon over data.
+- Færre dependencies
+- Mindre infrastruktur
 
 ---
 
@@ -70,10 +76,10 @@ NATS er skrevet i Go, og har klientbiblioteker for mer enn 40 språk.
 
 # Hva bruker vi NATS til?
 
-Fra et fugleperspektiv benytter vi NATS som:
+Fra et  benytter vi NATS som:
 
-- *"Service Mesh"* (load balancing/scale-out, retry, leveransegaranti og sikkerhet)
-- *"Data Mesh"* - (transport, tilgjengeliggjøring og sikkerhet)
+- *Service Mesh* - Uten alle sidevognene (load balancing/scale-out, retry, discovery, leveransegaranti, telemetri og sikkerhet)
+- *Data Mesh* - (transport, tilgjengeliggjøring og sikkerhet)
 
 
 ---
@@ -84,14 +90,14 @@ Mer konkret, benytter vi NATS til:
 
 - Kommunikasjon mellom mikrotjenester
     - Publish/Subscribe for å sende meldinger til mange mottakere eller samle informasjon fra mange sendere.
-    - Request/Reply for "synkron" eller mer presist asynkron kommunikasjon mellom tjenster.
+    - Request/Reply - Tenk http over NATS.  
 - Streaming og behandling av meldinger
     - Arbeidskøer
     - Append-only-logs
     - Event sourcing mønstre
 - Transport av dataprodukter til Analyse
-    - Benytter arbeidskøer som verktøy for å speile en append-only-log.
-    - Eksplisitt deling veldikeholdes av produktteamet.
+    - Benytter arbeidskøer som verktøy for å speile append-only-logs.
+    - Må eksplisitt deles i NATS og eier av datasettet (ofte et produktteam) bestemmer hvem det deles med. 
 
 ---
 
@@ -99,34 +105,33 @@ Mer konkret, benytter vi NATS til:
 
 Mer konkret, benytter vi NATS til:
 
-- Som en bro (mesh/vpn) mellom Sky og eget datasenter.
+- For kommunikasjon mellom Sky og eget datasenter.
     - NATS Infrastrukturen er tilgjengelig på Internett.
 - Som object store for persistering av større filer.
     - Gjerne i kombinasjon med en persitent metadata strøm.
 - Tilstandsmotor for Mattilsynets Plattform
     - Event drevet motor rundt ønsker lagret i KeyValue buckets. Aktive avstemming rundt persisterte ønsker.
-    - Inspirert av Kubernetes, men på et lavere nivå. Et ønske kunne ha vært, "jeg vil gjerne ha en kubernetes".
-    - Eksempel på eksisterende ønsker:
-        - Jeg vil ha et mijlø i sky
-        - Azure AD App Registration
-        - IdPorten, Borger autentisering og autorisasjon.
-        - Maskinporten, Maskin til maskin autentisering og autorisasjon.
+    - Inspirert av Kubernetes, men på et lavere nivå. 
+    - Eksempler på *ønsker*:
+        - Jeg vil ha et mijlø (konto/prosjekt) i sky (real)
+        - Jeg vil gjerne ha en Kubernetes (ikke nå lengre)
+        - Jeg trenger en Azure AD App Registration (real)
+        - Jeg trenger IdPorten, for borger autentisering og autorisasjon. (real)
+        - Maskinporten, for maskin til maskin autentisering og autorisasjon. (real)
 
 ---
 
 # Hvordan virker NATS? 
 
-> Dette høres ganske fett ut, men jeg trenger en mer teknisk tilnærming!
-> Hvordan kan jeg komme i gang å jobbe med dette?
+*Jeg er interessert! Hvordan kan jeg komme i gang å jobbe med dette?*
 
-Skjønner, la oss komme i gang.
-
+La oss starte en NATS server:
 ```
 nats-server --jetstream
 ```
 ---
 
-# Publish / Subscribe 
+# Publish/Subscribe og NATS Messages 
 
 Det grunnleggende fundamentet for kommunikasjon i NATS er meldinger i en "publish/subscribe" modell.
 
@@ -136,18 +141,15 @@ En melding består av:
 - Så mange `message headers` du måtte ønske
 - Et valgfritt `reply` addresse felt.
 
-> Default meldingsstørrelse er opp til 1MB. Dette kan konfigureres og økes til maximum 64MB.
-
 ---
 
 # La oss publisere noen meldinger 
 
-På et `subject`, i dette tilfelle `hello`, kan vi publisere noen meldinger:
-
+La oss bruke bash og nats cli for å publisere noen meldinger:
 ```bash
 for i in $(seq 10)
 do
-    nats pub hello "{hello_message:${i}"
+    nats pub chat"{chat.message:${i}"
 done
 echo "Done..."
 ```
@@ -160,14 +162,14 @@ La oss åpne en ny terminal hvor vi også lytter; før vi kjører bash scriptet 
 
 Slik kan du lytte på et subject:
 ```
-nats sub hello 
+nats sub chat
 ```
 
 La oss publishere meldingene igjen:
 ```bash
 for i in $(seq 10)
 do
-    nats pub hello "{hello_message:${i}}"
+    nats pub chat "{chat.message:${i}}"
 done
 echo "Done..."
 ```
@@ -176,15 +178,12 @@ echo "Done..."
 
 # Men vent, vi kan gjøre mer med et subject
 
-Et `subject` er ikke bare et navn, i NATS kan det være et meningsfyllt hierarki.
+Et `subject` er en adresse og du kan på sett og vis lage deg meningsfylt struktur eller navnerom med "." notasjon.
 
-Vi kan utvide **hello** subject benyttet tidligere med et hirarki som vi bruker til å tilføre mening og kontekst:
+- chat.world 
+- chat.meetup.hamar
+- chat.{{username}}.dm
 
-- hello.world 
-- hello.meetup.hamar
-- hello.{{username}}.dm
-
-De 2 øverste er ganske åpenbare, men la oss utforske den siste som har en litt mer dynamisk struktur.
 
 ---
 
@@ -192,11 +191,11 @@ De 2 øverste er ganske åpenbare, men la oss utforske den siste som har en litt
 
 La oss publiser disse meldingene noen ganger og leke med hvordan vi lytter:
 ```bash
-nats pub hello.world "Yolo!"
-nats pub hello.meetup.hamar "Tjenare!"
-nats pub hello.ivar.dm "NATS er kult!" 
-nats pub hello.arne.dm "Hei, har du testa disse NATS greiene!?"
-nats pub hello.kari.dm "Fikk du med deg at Pizzanini bytter navn!?"
+nats pub chat.world "Yolo!"
+nats pub chat.meetup.hamar "Tjenare!"
+nats pub chat.ivar.dm "NATS er kult!" 
+nats pub chat.arne.dm "Hei, har du testa disse NATS greiene!?"
+nats pub chat.kari.dm "Fikk du med deg at Pizzanini bytter navn!?"
 echo "Done..."
 ```
 
@@ -231,7 +230,7 @@ func main() {
     reply, err := nc.Request("commands", []byte("reboot"), timeout)
     if err != nil {
         fmt.Printf("Error sending request: %v", err)
-	return
+        return
     }
     fmt.Printf("Received reply: %s\n", string(reply.Data))
 }
@@ -250,59 +249,56 @@ Dette er en kø gruppe (`queue group`). Dette kan benyttes for å oppnå:
 - Feiltolereanse
 
 
+---
+
+# Koordinering - Queue Group
+
 ```plantuml
 ~~~plantuml -utxt -pipe
 @startuml
 skinparam monochrome true
-title Pub/Sub Model (Static Diagram)
+title Pub/Sub Model with Queue Group (Static Diagram)
 left to right direction
 
 [Publisher] --> [NATS Subject]
-[NATS Subject] <-- [Subscriber1]
-[NATS Subject] <-- [Subscriber2]
-[NATS Subject] <-- [Subscriber3]
+[NATS Subject] --> [Queue Group]
+[Queue Group] --> [Subscriber1]
+[Queue Group] --> [Subscriber2]
+[Queue Group] --> [Subscriber3]
 
+note bottom of [Queue Group]
+  Only one subscriber
+  in the group
+  receives each message.
+end note
 @enduml
 ~~~
 ```
- 
----
-
-# Persistering
-
-Vi har til nå bare snakket om funksjonalitet som finnes i det som omtales som **NATS Core**.
-
-For persistering av meldinger finnes det et overbygg som heter **Jetstream**.
-
-Som med alt annet i **NATS** så baserer dette seg i sin enkelhet å persistere meldinger på `subjects` du er interessert i og samler dette i en `jetstream`.
-
-Dette gir oss fundamentet for `streaming` og `event sourcing` mønstre.
 
 ---
 
-# Jetstream - Retention Policies
+# Peristering
 
-**Jetstream** er fleksibelt og understøtter en masse bruksområder. 
+Jetstream er en persisterings løsning på toppen av publish/subscribe aktivitet:
 
-Vi har 3 ulike `Retention Policies`:
-- Limits (default)
-    - Meldinger beholdes inntil strømmen treffer sin konfigurerte størrelse eller antall meldinger.
-- Interest
-    - Meldinger beholdes inntil alle registrerte konsumenter på strømmen har motatt og `Acked` meldingen. 
- - WorkQueue
-    - Medlinger beholdes inntil meldinger har blitt konsumert og `Acked`.
+```plantuml
+~~~plantuml -utxt -pipe
+@startuml
+skinparam monochrome true
+title Jetstream model (Static Diagram)
+left to right direction
 
----
+[Publisher] --> [NATS Subject]
+[NATS Subject] --> [Stream]
+[Stream] --> [Jetstream Subscriber]
 
-# Jetstream - Retention Parameters
-
-I tillegg til `Retention Policies` har vi også `Retention Parameters` for enda bedre kontroll på hvordan meldinger persisteres.
-
-## Retention Parameters
-
-- **Max Age** - Hvor lenge en melding kan ligge på en strøm
-- **Max Messages** - Hvor mange meldinger vi gidder å ta vare på
-- **Max Bytes** - Hvor mye data vi gidder å ta vare på
+note bottom of [Stream]
+  Jetstream persists messages
+  by streamconfig
+end note
+@enduml
+~~~
+```
 
 ---
 
@@ -468,6 +464,7 @@ func main() {
 ///    }
 }
 ```
+
 ---
 
 # Jetstream - Retention Policies
@@ -496,7 +493,13 @@ I tillegg til `Retention Policies` har vi også `Retention Parameters` for enda 
 
 ---
 
-# FIN - Men vent det er så mye mer
+# FIN 
+
+Men, vent, det er så mye mer....
+
+---
+
+# FIN 
 
 - Key/Value Store
 - Object Store
@@ -507,8 +510,15 @@ I tillegg til `Retention Policies` har vi også `Retention Parameters` for enda 
 - Deling
 - Observerbarhet
 - NATS Server Topologier
+    - Super Clusters
+    - Gateways
+    - Leaf nodes
 - MQTT
 - WSS
+
+---
+
+# FIN
 
 Men vi setter en strek her for denne gang.
 
