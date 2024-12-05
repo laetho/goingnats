@@ -6,12 +6,34 @@
 
 # Let's go NATS!
 
-1. Hva er NATS?
-2. Hvorfor bruker vi NATS?
+1. Hvorfor bruker vi NATS?
+2. Hva er NATS?
 3. Hva bruker vi NATS til?
 4. Hvordan virker NATS?
 
 La oss gå NATS, sammen!
+
+---
+# Hvorfor bruker vi NATS?
+
+...
+
+---
+
+# Hvorfor bruker vi NATS?
+
+**Forenkling**
+
+---
+
+# Hvorfor bruker vi NATS?
+
+**Forenkling**
+
+- Enkle byggeklosser for å løse kompliserte utfordringer i distribuerte systemer.
+- Stedsuavhengighet. Multi-cloud og eget datasenter på "easy-mode".
+- Seperasjon, robusthet og enkel integrasjon i og mellom systemer.
+- Muliggjør integrasjon over data.
 
 ---
 
@@ -37,41 +59,6 @@ Egenskaper:
 - Sikkerhet - Desentralisert autentisering og autorisasjon, TLS transport og JWT-based zero trust.
 
 NATS er skrevet i Go, og har klientbiblioteker for mer enn 40 språk.
-
----
-
-# Hva er NATS?
-
-## Referanser
-
-- https://nats.io
-- https://nats.io/docs
-- https://github.com/nats.io/
-- https://www.cncf.io/projects/nats/ 
-- https://natsbyexample.com/ 
-
----
-
-# Hvorfor bruker vi NATS?
-
-...
-
----
-
-# Hvorfor bruker vi NATS?
-
-**Forenkling**
-
----
-
-# Hvorfor bruker vi NATS?
-
-**Forenkling**
-
-- Enkle byggeklosser for å løse kompliserte utfordringer i distribuerte systemer.
-- Stedsuavhengighet. Multi-cloud og eget datasenter på "easy-mode".
-- Seperasjon, robusthet og enkel integrasjon i og mellom systemer.
-- Muliggjør integrasjon over data. Færre synkrone integrasjoner.
 
 ---
 
@@ -117,12 +104,13 @@ Mer konkret, benytter vi NATS til:
 - Som object store for persistering av større filer.
     - Gjerne i kombinasjon med en persitent metadata strøm.
 - Tilstandsmotor for Mattilsynets Plattform
-    - Event drevet motor rundt ønsker lagret i KeyValue buckets. Aktive *reconcilers* rundt persisterte ønsker.
-    - Inspirert av Kubernetes, men løftet et nivå høyere. Et ønske kunne ha vært, "jeg vil gjerne ha en kubernetes".
-- Plattform integrasjoner, eksempelvis: 
-    - Azure AD App Registration
-    - IdPorten, Borger autentisering og autorisasjon.
-    - Maskinporten, Maskin til maskin autentisering og autorisasjon.
+    - Event drevet motor rundt ønsker lagret i KeyValue buckets. Aktive avstemming rundt persisterte ønsker.
+    - Inspirert av Kubernetes, men på et lavere nivå. Et ønske kunne ha vært, "jeg vil gjerne ha en kubernetes".
+    - Eksempel på eksisterende ønsker:
+        - Jeg vil ha et mijlø i sky
+        - Azure AD App Registration
+        - IdPorten, Borger autentisering og autorisasjon.
+        - Maskinporten, Maskin til maskin autentisering og autorisasjon.
 
 ---
 
@@ -152,17 +140,9 @@ En melding består av:
 
 ---
 
-# Pulblish / Subscribe | Subjects
+# La oss publisere noen meldinger 
 
-I NATS kommuniserer vi over `subjects` eller da emner på norsk. Dette gir en navnebasert addressering i motsetning til de ulike ip, port og path baserte endepunktene vi vanligvis er nødt til å forholde oss til. 
-
-I utgangspunktet er `subjects` i NATS *ephemeral*. De eksisterer så lenge noen publiserer og noen lytter. Er det ingen som lytter går meldingen ut i intet.
-
----
-
-# Hvordan bruker jeg så et subject?
-
-På et subject, i dette tilfelle `hello`, kan vi publisere noen meldinger:
+På et `subject`, i dette tilfelle `hello`, kan vi publisere noen meldinger:
 
 ```bash
 for i in $(seq 10)
@@ -171,9 +151,6 @@ do
 done
 echo "Done..."
 ```
-
-For et antiklimaks! Men, hva skjedde egentlig der?
-
 
 ---
 
@@ -186,8 +163,7 @@ Slik kan du lytte på et subject:
 nats sub hello 
 ```
 
-
-La oss publishere noen medlinger igjen:
+La oss publishere meldingene igjen:
 ```bash
 for i in $(seq 10)
 do
@@ -200,7 +176,7 @@ echo "Done..."
 
 # Men vent, vi kan gjøre mer med et subject
 
-Et subject er ikke bare et navn, i NATS kan det være et meningsfyllt hierarki.
+Et `subject` er ikke bare et navn, i NATS kan det være et meningsfyllt hierarki.
 
 Vi kan utvide **hello** subject benyttet tidligere med et hirarki som vi bruker til å tilføre mening og kontekst:
 
@@ -226,50 +202,7 @@ echo "Done..."
 
 ---
 
-# Publish / Subscribe (Fan-out)
-
-```plantuml
-~~~plantuml -utxt -pipe
-@startuml
-skinparam monochrome true
-title Pub/Sub Model (Static Diagram)
-left to right direction
-
-[Publisher] --> [NATS Subject]
-[NATS Subject] <-- [Subscriber1]
-[NATS Subject] <-- [Subscriber2]
-[NATS Subject] <-- [Subscriber3]
-
-@enduml
-~~~
-```
----
-
-# Publish / Subscribe (Fan-in)
-
-```plantuml
-~~~plantuml -utxt -pipe
-@startuml
-skinparam monochrome true
-title Fan-In with Queue Group
-
-node "NATS Subject" as NATS
-
-Publisher1 --> NATS : Publish "updates"
-Publisher2 --> NATS : Publish "updates"
-Publisher3 --> NATS : Publish "updates"
-NATS --> Subscriber : Distributes message
-
-@enduml
-
-~~~
-```
-
----
-
 # Request-Reply
-
-En NATS melding kan inneholde en `reply` verdi. Her kan vi få et dynamisk unikt `subject` en klient forventer å få et svar på sin forespørsel. Det er altså klienten som bestemmer hvor svaret skal leveres.
 
 Server:
 ```
@@ -315,6 +248,23 @@ Dette er en kø gruppe (`queue group`). Dette kan benyttes for å oppnå:
 - Arbeidsfordeling
 - Skalerbarhet
 - Feiltolereanse
+
+
+```plantuml
+~~~plantuml -utxt -pipe
+@startuml
+skinparam monochrome true
+title Pub/Sub Model (Static Diagram)
+left to right direction
+
+[Publisher] --> [NATS Subject]
+[NATS Subject] <-- [Subscriber1]
+[NATS Subject] <-- [Subscriber2]
+[NATS Subject] <-- [Subscriber3]
+
+@enduml
+~~~
+```
  
 ---
 
@@ -503,7 +453,6 @@ func main() {
       sum += value
       count++
       msg.Ack()
-mp":"2024-12-04T21:13:39.539539415Z","stream":"SENSORS","consumer":"iOKvVFm1","action":"delete"}
     })
 ///	if err != nil {
 ///		fmt.Printf("Error starting consumer subscription: %v\n", err)
@@ -518,6 +467,112 @@ mp":"2024-12-04T21:13:39.539539415Z","stream":"SENSORS","consumer":"iOKvVFm1","a
 ///      fmt.Printf("Average temperature: %.2f\n", average)
 ///    }
 }
+```
+---
+
+# Jetstream - Retention Policies
+
+**Jetstream** er fleksibelt og understøtter en masse bruksområder. 
+
+Vi har 3 ulike `Retention Policies`:
+- Limits (default)
+    - Meldinger beholdes inntil strømmen treffer sin konfigurerte størrelse eller antall meldinger.
+- Interest
+    - Meldinger beholdes inntil alle registrerte konsumenter på strømmen har motatt og `Acked` meldingen. 
+ - WorkQueue
+    - Medlinger beholdes inntil meldinger har blitt konsumert og `Acked`.
+
+---
+
+# Jetstream - Retention Parameters
+
+I tillegg til `Retention Policies` har vi også `Retention Parameters` for enda bedre kontroll på hvordan meldinger persisteres.
+
+## Retention Parameters
+
+- **Max Age** - Hvor lenge en melding kan ligge på en strøm
+- **Max Messages** - Hvor mange meldinger vi gidder å ta vare på
+- **Max Bytes** - Hvor mye data vi gidder å ta vare på
+
+---
+
+# FIN - Men vent det er så mye mer
+
+- Key/Value Store
+- Object Store
+- Dead Letter Queues
+- Multitenancy
+- Message Replay
+- Autentisering og autorisasjon
+- Deling
+- Observerbarhet
+- NATS Server Topologier
+- MQTT
+- WSS
+
+Men vi setter en strek her for denne gang.
+
+**Takk for oppmerksomheten!**
+
+---
+
+# Om presentasjonen 
+
+Slide-"deck" er tilgjengelig på https://github.com/laetho/goingnats.
+
+Software som benyttes er "slides" på https://github.com/maaslalani/slides. Men det er også mulig å se på innholdet som ren markdown.
+
+> "slides" programmet er tilgjengelig via homebrew for de som er på Mac.
+
+---
+
+# Referanser 
+
+- https://nats.io
+- https://nats.io/docs
+- https://github.com/nats.io/
+- https://www.cncf.io/projects/nats/ 
+- https://natsbyexample.com/ 
+
+---
+
+# Publish / Subscribe (Fan-out)
+
+```plantuml
+~~~plantuml -utxt -pipe
+@startuml
+skinparam monochrome true
+title Pub/Sub Model (Static Diagram)
+left to right direction
+
+[Publisher] --> [NATS Subject]
+[NATS Subject] <-- [Subscriber1]
+[NATS Subject] <-- [Subscriber2]
+[NATS Subject] <-- [Subscriber3]
+
+@enduml
+~~~
+```
+---
+
+# Publish / Subscribe (Fan-in)
+
+```plantuml
+~~~plantuml -utxt -pipe
+@startuml
+skinparam monochrome true
+title Fan-In with Queue Group
+
+node "NATS Subject" as NATS
+
+Publisher1 --> NATS : Publish "updates"
+Publisher2 --> NATS : Publish "updates"
+Publisher3 --> NATS : Publish "updates"
+NATS --> Subscriber : Distributes message
+
+@enduml
+
+~~~
 ```
 
 ---
@@ -557,35 +612,5 @@ All klient eller da `consumer` tilstand blir lagret på **NATS** serveren.
 | Kritiske arbeidsflyter med retries      | Durable             | Ack-status lagres for å sikre at meldinger ikke behandles mer enn én gang.    |
 | Lastbalansering mellom flere prosesser  | Durable + Queue     | Tilstand lagres for hele gruppen – sikrer kontinuitet selv uten aktive medlemmer. |
 
----
-
-# FIN - Men vent det er så mye mer
-
-- Key/Value Store
-- Object Store
-- Dead Letter Queues
-- Multitenancy
-- Message Replay
-- Autentisering og autorisasjon
-- Deling
-- Observerbarhet
-- NATS Server Topologier
-- MQTT
-- WSS
-
-Men vi setter en strek her for denne gang.
-
-**Takk for oppmerksomheten!**
-
----
-
-# Om presentasjonen 
-
-Slide-"deck" er tilgjengelig på https://github.com/laetho/goingnats.
-
-Software som benyttes er "slides" på https://github.com/maaslalani/slides. Men det er også mulig å se på innholdet som ren markdown.
-
-> "slides" programmet er tilgjengelig via homebrew for de som er på Mac.
-
-
+-
 
