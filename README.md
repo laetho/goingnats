@@ -39,8 +39,12 @@ slides goingnats.md
 
 Du kan benytte `ctrl+e`for å eksekvere codeblocks som finnes i illustrasjonen.
 
-Da trenger du også nats-server som kan installeres på følgende måte:
+Da trenger du også go og nats-server som kan installeres på følgende måte:
 
 ```bash
+brew install golang
 brew install nats-server
+go mod tidy # på topnivå for å laste ned nødvendig go kode.
 ```
+
+> Dette er bare nødvendig om du vil eksekvere eksemplene
