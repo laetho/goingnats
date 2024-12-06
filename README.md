@@ -16,12 +16,19 @@ Presentasjon ble første gang holdt på en meet up i Hamar i regi av Hamar Digir
 
 ## Om "slide-deck"
 
-Gikk litt utenom vanlig verktøykasse her og benyttet en program som heter `slides`.
+Gikk litt utenom vanlig verktøykasse her og benyttet en program som heter `slides`: https://github.com/maaslalani/slides
+
 Dette finnes i homebrew og kan installeres på denne måten:
 
 ````bash
 brew install slides
 ``````
+
+eventuelt...
+
+```bash
+go install github.com/maaslalani/slides@latest
+```
 
 Presentasjonen benytter også planuml for illustrasjoner så dette må også installers om du ønsker å titte på noe annet enn markdown direkte på github.
 
